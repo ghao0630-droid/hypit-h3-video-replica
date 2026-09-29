@@ -1,0 +1,181 @@
+{
+  "repository": "https://github.com/Sac-Y/MiniMax-H3-Cloud",
+  "commit": "e0c97e2a0bf0afbfbbfd981359b091a38e7d0d76",
+  "pluginPath": "plugins/minimax-h3-cloud",
+  "pluginVersion": "0.1.0",
+  "verifiedAt": "2026-09-29",
+  "files": [
+    {
+      "path": ".codex-plugin/plugin.json",
+      "sha256": "67b1570381e6ddeccf4cb5c97bf93a23866293f017a8e9666d3dba4065df76b7"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "7b94c1360d4a4d2925f09ee801a8913c20770564d1bd263b1bdb07075d6b6bf5"
+    },
+    {
+      "path": "NOTICE",
+      "sha256": "f410dbb9ca578db7b986a66277a5bb908aaf1c92d148e30d204055811775671e"
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "sha256": "3366abbbda7fee7715365000c7e15416099b87f494655738446dd19c4c149b6d"
+    },
+    {
+      "path": "assets/logo-dark.svg",
+      "sha256": "6bee225d1afababa507f1e4000e028bcdb8a1936e1482c843a4ba66fdfa24dc2"
+    },
+    {
+      "path": "assets/logo.svg",
+      "sha256": "e6898c042fce570fc1e087909f23fb629ba38d8815b3862234002f7b261ac22c"
+    },
+    {
+      "path": "runtime/config/minimax-h3.example.json",
+      "sha256": "9d62ad13c484639e1d21b74fb7919b351e372d6d6e650b29baf8aee719f2efd6"
+    },
+    {
+      "path": "runtime/deployments/compshare/official-comfyui-033-4090-64gb-turbo-experimental.json",
+      "sha256": "f58e26b843ab2428252f33a6f4514dd46370b01be8f71d336552c24c3453be1d"
+    },
+    {
+      "path": "runtime/deployments/compshare/official-comfyui-033-5090-64gb-turbo-candidate.json",
+      "sha256": "2158b6bb33edf940f51f57130db25034cde00ec31b7c50bce9a303293aa05a75"
+    },
+    {
+      "path": "runtime/deployments/compshare/official-comfyui-033-5090-turbo-auto.json",
+      "sha256": "ac314e8960e97eeda393b6702e170034b549ac9aaf12c03117d574394055261f"
+    },
+    {
+      "path": "runtime/deployments/compshare/official-comfyui-033-5090-turbo.json",
+      "sha256": "f82e6be34f52cebc78dc697b035bff73da35348be72e475ad50bbaba115221f9"
+    },
+    {
+      "path": "runtime/package.json",
+      "sha256": "89e836b5dec6e91e4d91d29854e6c8718cacc202da9cfc1a479fdf04f35e7c4e"
+    },
+    {
+      "path": "runtime/profiles/compshare-official-h3-turbo-8step-033-64gb-candidate.json",
+      "sha256": "c1ea64b2a1243dda7b8147d4b839a91a979fc50bc82dd59672a26506dea692a6"
+    },
+    {
+      "path": "runtime/profiles/compshare-official-h3-turbo-8step-033-auto-v1.json",
+      "sha256": "47f9f291e433c5a2d70547c1bb0b592bb6ff1593d04cfe39f5d640f88839410b"
+    },
+    {
+      "path": "runtime/profiles/compshare-official-h3-turbo-8step-033-v1.json",
+      "sha256": "99a2b1426dfe617f6b8e94effb62858ba4ea59dc575637c5bee88df16b06cde4"
+    },
+    {
+      "path": "runtime/runtime-specs/minimax-h3-turbo-8step-comfyui-033-v1.json",
+      "sha256": "04224a3acbf1036980f96e24cf7c47cd4034083d061df653b57b6c389aa1cf03"
+    },
+    {
+      "path": "runtime/scripts/h3-cloud.mjs",
+      "sha256": "f7a98a4966a947c17ff20b9e878ead7897bf3004d12618451e5496532c110d0d"
+    },
+    {
+      "path": "runtime/scripts/h3-comfy.mjs",
+      "sha256": "5b1efbd067aa6ff4e7af1408d5a1d23d4e26b690f9b1c86a95957f8ada277eb6"
+    },
+    {
+      "path": "runtime/scripts/h3-onboard.mjs",
+      "sha256": "4b09c65607fdc5f9681e6af320ccd8318844ef4f8f1a15ff1514823ec8d7dc6c"
+    },
+    {
+      "path": "runtime/scripts/h3-provision.mjs",
+      "sha256": "23072057fbbdfccc8f815cb8072bab3486ae487dd05a78a1507099566210d0ad"
+    },
+    {
+      "path": "runtime/scripts/h3-transport-diagnose.mjs",
+      "sha256": "c1611eea344698be2a6f7542f5069975d8026ef4e62ef0e6603c976d31bea893"
+    },
+    {
+      "path": "runtime/src/comfy-client.mjs",
+      "sha256": "6cd110e34aab9371cdc9b2da19de03d889478672957458a7694fc8872f80fbce"
+    },
+    {
+      "path": "runtime/src/comfy-job.mjs",
+      "sha256": "67c8e34638c469b04fccb11b57169e2dabf68053d206995421398b6e5c64de11"
+    },
+    {
+      "path": "runtime/src/compshare-cli.mjs",
+      "sha256": "c1bfbbbe367a1add3c37d9241010596353b7d62c4e5604c53a9b40c62ca9f3d7"
+    },
+    {
+      "path": "runtime/src/config-store.mjs",
+      "sha256": "bc72e66b4ac7c031d95d88f9cdb2e4d276af49a229cdff2f277b6711a9a8b7f5"
+    },
+    {
+      "path": "runtime/src/deployment-planner.mjs",
+      "sha256": "24ca704c97cc5a80027ad2698b445875579e5e7a1addb212688006bd3c252ab1"
+    },
+    {
+      "path": "runtime/src/media-input.mjs",
+      "sha256": "6c20c0d3ba5e07711e29739b097bd6ca02de0ab70ebfae2951a85eb9712c1721"
+    },
+    {
+      "path": "runtime/src/onboarding.mjs",
+      "sha256": "af214d26e153afd1917bbad2d91cf9a2388e7c54e46c9477c5aa8b4490f3bb76"
+    },
+    {
+      "path": "runtime/src/project-config.mjs",
+      "sha256": "bb735713a341b3f50dc8bb31ad310f51e7d391e8a00424d7669c231e9339539f"
+    },
+    {
+      "path": "runtime/src/providers/compshare-provider.mjs",
+      "sha256": "98be89f5b6c52e87d82fe2e02b82594b4f897913fc371133be02c8fbb29731f8"
+    },
+    {
+      "path": "runtime/src/resource-catalog.mjs",
+      "sha256": "575eb2f1c5c7a3699d15e0d9f28ed71f6fb64269fcfc94c67bf7d66783bcf1d1"
+    },
+    {
+      "path": "runtime/src/runtime-endpoint.mjs",
+      "sha256": "46e055808cb0a2f591a8dc2d4705f763eb67be77db7b48f8360318560dcad071"
+    },
+    {
+      "path": "runtime/src/runtime-prepare.mjs",
+      "sha256": "3e7e69a3b1d50bcf29dc1deba199d6ff57e01221b098f5e4f88b2f8dc2139986"
+    },
+    {
+      "path": "runtime/src/ssh-tunnel.mjs",
+      "sha256": "11cb0fc5b9fe8bee70b090073c9960c335553ae8ba5cc64942f748cd0e629683"
+    },
+    {
+      "path": "runtime/src/user-paths.mjs",
+      "sha256": "628f0a6829db9e61b47719a991c25449bf0a09aacb8fb64d418b19a0e8f38ae4"
+    },
+    {
+      "path": "runtime/src/workflow.mjs",
+      "sha256": "7f37624a5d032a3cea17bc157a3871aa625f34d3b1b68dacfa8568bea74c0088"
+    },
+    {
+      "path": "runtime/workflows/official-h3-reference-image-native-20step-api.json",
+      "sha256": "069e24990b420a778ae708257eaa57f5b28b7424f457c9052c014ba5fa1d2b4a"
+    },
+    {
+      "path": "runtime/workflows/official-h3-t2v-turbo-8step-api.json",
+      "sha256": "6e3ec6cb8924b50f7f766085604176d82e70c4c019f9750629fc4ac29ec06774"
+    },
+    {
+      "path": "scripts/h3-cloud",
+      "sha256": "19c5624208da89591345ec8ca78235893fc724dd6303076cfc292653f91d8c38"
+    },
+    {
+      "path": "scripts/h3-onboard",
+      "sha256": "6a5f176531b7d7891d23a1c6ba13583aa61954975fb9410f0c45fc3a913b9afe"
+    },
+    {
+      "path": "scripts/h3-provision",
+      "sha256": "459c610e6bf67906f8700bd4a947038b8568458bc57a10e8fb0d0340ed801ca1"
+    },
+    {
+      "path": "skills/minimax-h3-video/SKILL.md",
+      "sha256": "7c10068bd7dfd1d336db3f1d9ec8d0cbb187f89990a3a0d2f43ccf9600757409"
+    },
+    {
+      "path": "skills/minimax-h3-video/agents/openai.yaml",
+      "sha256": "50a1527e9bdb5aa481c14533567f025276b9a297c2693a43b18b407c0141abe4"
+    }
+  ]
+}

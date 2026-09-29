@@ -1,0 +1,12 @@
+{
+  "name": "hypit-h3-video-replica-workflow",
+  "version": "1.1.1",
+  "private": true,
+  "description": "Installable portrait-video reconstruction tutorial and local-only handoff tools",
+  "type": "module",
+  "engines": { "node": ">=22.20.0" },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "verify": "node tools/verify-package.mjs"
+  }
+}

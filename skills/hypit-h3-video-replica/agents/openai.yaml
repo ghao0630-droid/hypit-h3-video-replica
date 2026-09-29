@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hypit + H3 肖像复刻"
+  short_description: "安装肖像视频复刻流程，准备首帧、分段生成和本地返修，保留费用与验收记录"
+  default_prompt: "使用 $hypit-h3-video-replica 先检查安装环境和素材，在本次预算确认前不要启动 GPU。"
