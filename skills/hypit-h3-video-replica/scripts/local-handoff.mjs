@@ -5,7 +5,7 @@ import { access, copyFile, mkdir, readFile, realpath, rename, stat, writeFile } 
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 
-const usage = `Local support for tutorial v1.1.1 (Node >=22.15).
+const usage = `Local H3 support for workflow v1.2.0 (Node >=22.20).
   bind --plugin-root PATH --config PATH --max-hourly YUAN
   artifact --manifest PATH --within OUTPUT_DIRECTORY
   concat-list --first MP4 --second MP4 --output TXT
@@ -29,6 +29,24 @@ function nonNegativeNumber(value, name) {
     throw new Error(`${name} unavailable; do not replace unknown values with zero.`);
   }
   return Number(value);
+}
+function usageSeconds(value) {
+  const seconds = nonNegativeNumber(value, 'Usage');
+  if (seconds > Number.MAX_SAFE_INTEGER) throw new Error('Usage exceeds reliable numeric precision; inspect provider records.');
+  return seconds;
+}
+function observationTime(value) {
+  if (typeof value !== 'string') throw new Error('Invalid snapshot checkedAt timestamp.');
+  const parts = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.exec(value);
+  if (!parts) throw new Error('Snapshot checkedAt requires an ISO timestamp with timezone.');
+  const [year, month, day, hour, minute, second] = parts.slice(1).map(Number);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  const epoch = Date.parse(value);
+  if (month < 1 || month > 12 || day < 1 || day > days[month - 1] || hour > 23 || minute > 59 || second > 59 || !Number.isFinite(epoch)) {
+    throw new Error('Invalid snapshot checkedAt timestamp.');
+  }
+  return epoch;
 }
 async function missing(path) {
   try { await access(path); } catch (e) { if (e.code === 'ENOENT') return; throw e; }
@@ -118,9 +136,12 @@ try {
     for await (const chunk of process.stdin) input += chunk;
     const envelope = JSON.parse(input);
     if (envelope.ok !== true) throw new Error('Provider did not return a successful usage readback.');
-    const instance = envelope.data?.Instances?.find((item) => item.UHostId === resourceId);
-    if (!instance) throw new Error('Selected resource is missing from the response.');
-    const usage = nonNegativeNumber(instance.UsageSeconds, 'Usage');
+    const instances = envelope.data?.Instances;
+    if (!Array.isArray(instances)) throw new Error('Provider usage readback has no instance list.');
+    const matches = instances.filter((item) => item?.UHostId === resourceId);
+    if (matches.length !== 1) throw new Error('Selected resource must appear exactly once in the response.');
+    const instance = matches[0];
+    const usage = usageSeconds(instance.UsageSeconds);
     const rate = nonNegativeNumber(instance.InstancePrice, 'Instance rate');
     const snapshot = { resourceId, checkedAt: new Date().toISOString(), usageSeconds: usage, instanceHourlyYuan: rate, diskHourlyYuan: instance.DiskPrice ?? null, imageHourlyYuan: instance.CompShareImagePrice ?? null };
     const output = resolve(requireValue(v.output, '--output'));
@@ -130,10 +151,19 @@ try {
     const before = await json(requireValue(v.before, '--before'));
     const after = await json(requireValue(v.after, '--after'));
     if (!before.resourceId || before.resourceId !== after.resourceId) throw new Error('Usage snapshots belong to different resources.');
-    for (const item of [before, after]) if (!Number.isFinite(item.usageSeconds) || item.usageSeconds < 0 || !Number.isFinite(item.instanceHourlyYuan) || item.instanceHourlyYuan < 0) throw new Error('Incomplete usage snapshot.');
+    for (const item of [before, after]) {
+      if (!Number.isFinite(item.usageSeconds) || !Number.isFinite(item.instanceHourlyYuan) || item.instanceHourlyYuan < 0) throw new Error('Incomplete usage snapshot.');
+      usageSeconds(item.usageSeconds);
+    }
+    const beforeHasTime = Object.hasOwn(before, 'checkedAt');
+    const afterHasTime = Object.hasOwn(after, 'checkedAt');
+    if (beforeHasTime !== afterHasTime) throw new Error('Only one snapshot has checkedAt; obtain matching observation records.');
+    if (beforeHasTime && observationTime(after.checkedAt) < observationTime(before.checkedAt)) throw new Error('Snapshot observation time reversed; inspect source records.');
     const delta = after.usageSeconds - before.usageSeconds;
     if (delta < 0 || before.instanceHourlyYuan !== after.instanceHourlyYuan) throw new Error('Usage counter reset or rate changed; inspect provider records before estimating.');
-    console.log(JSON.stringify({ resourceId: before.resourceId, usageSeconds: delta, instanceHourlyYuan: after.instanceHourlyYuan, instanceUsageEstimateYuan: Number((delta / 3600 * after.instanceHourlyYuan).toFixed(6)), excludesOtherFees: true, isSettledInvoice: false }, null, 2));
+    const estimate = delta / 3600 * after.instanceHourlyYuan;
+    if (!Number.isFinite(estimate)) throw new Error('Usage estimate overflow; inspect source numbers before reporting a cost.');
+    console.log(JSON.stringify({ resourceId: before.resourceId, usageSeconds: delta, instanceHourlyYuan: after.instanceHourlyYuan, instanceUsageEstimateYuan: Number(estimate.toFixed(6)), observationTimeOrderVerified: beforeHasTime, beforeCheckedAt: before.checkedAt ?? null, afterCheckedAt: after.checkedAt ?? null, excludesOtherFees: true, isSettledInvoice: false }, null, 2));
   } else { throw new Error(usage); }
 } catch (error) {
   console.error(error.message);

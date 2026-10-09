@@ -4,7 +4,30 @@ import { chmod, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { checkPlugin, versionAtLeast } from '../skills/hypit-h3-video-replica/scripts/doctor.mjs';
+import { checkPlugin, probe, versionAtLeast } from '../skills/hypit-h3-video-replica/scripts/doctor.mjs';
+
+test('explicit local executable works without being on PATH', async () => {
+  const result = await probe('deliberately-not-on-path', ['--version'], process.execPath);
+  assert.equal(result.available, true);
+  assert.equal(result.locationMode, 'explicit');
+  assert.ok(result.executable.startsWith('/'));
+});
+
+test('invalid explicit path refuses PATH fallback even when command is installed', async () => {
+  const result = await probe(process.execPath, ['--version'], '/nonexistent/h3-doctor-fixture');
+  assert.equal(result.available, false);
+  assert.match(result.reason, /no PATH fallback/);
+  assert.equal((await probe(process.execPath, ['--version'], 'relative-tool')).available, false);
+});
+
+test('explicit path is an executable filename, not shell syntax', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'h3-doctor-literal-'));
+  const selected = join(root, 'local tool; echo unexpected');
+  await writeFile(selected, '#!/bin/sh\nprintf "fixture 1.0.0\\n"\n');
+  await chmod(selected, 0o755);
+  assert.equal((await probe('unused', ['--version'], selected)).version, 'fixture 1.0.0');
+  assert.equal((await probe('unused', ['--version'], root)).available, false);
+});
 
 test('version comparison respects the installers actual minimum', () => {
   assert.equal(versionAtLeast('v22.20.0', [22, 20, 0]), true);

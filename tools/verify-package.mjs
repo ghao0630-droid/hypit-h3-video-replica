@@ -11,9 +11,10 @@ const skill = 'skills/hypit-h3-video-replica';
 export const publishFiles = [
   '.gitattributes', '.gitignore', 'README.md', 'NOTICE.md', 'package.json',
   `${skill}/SKILL.md`, `${skill}/agents/openai.yaml`,
-  `${skill}/assets/h3-baseline.json`, `${skill}/assets/task.example.json`,
+  `${skill}/assets/h3-baseline.json`, `${skill}/assets/task.example.json`, `${skill}/assets/workflow.example.json`,
   `${skill}/scripts/doctor.mjs`, `${skill}/scripts/local-handoff.mjs`,
   `${skill}/references/installation.md`, `${skill}/references/tutorial.md`, `${skill}/references/verification.md`,
+  `${skill}/references/workflow.md`, `${skill}/references/seedance.md`, `${skill}/references/design-presentation.md`, `${skill}/references/lessons.md`,
   'tests/doctor.test.mjs', 'tests/local-handoff.test.mjs', 'tools/verify-package.mjs',
 ].sort();
 
@@ -75,6 +76,11 @@ async function main() {
   const template = JSON.parse(await readFile(join(root, skill, 'assets/task.example.json'), 'utf8'));
   assert.equal(template.maxHourlyYuan, null); assert.equal(template.maxTotalYuan, null);
   assert.ok(template.authorization.includes('<')); assert.ok(template.endingLine.includes('<'));
+  const workflow = JSON.parse(await readFile(join(root, skill, 'assets/workflow.example.json'), 'utf8'));
+  assert.equal(workflow.backend, null); assert.equal(workflow.authorization.generation, null);
+  assert.equal(workflow.authorization.materialUpload, null);
+  for (const field of ['creditCeiling', 'gpuHourlyYuanCeiling', 'totalYuanCeiling']) assert.equal(workflow.authorization[field], null);
+  assert.equal(workflow.qa.watchedAndListened, false);
   const baseline = JSON.parse(await readFile(join(root, skill, 'assets/h3-baseline.json'), 'utf8'));
   assert.equal(baseline.files.length, 43); assert.match(baseline.commit, /^[a-f0-9]{40}$/);
   assert.equal(new Set(baseline.files.map(x => x.path)).size, 43);

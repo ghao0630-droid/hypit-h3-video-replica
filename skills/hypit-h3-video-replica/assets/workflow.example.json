@@ -1,0 +1,51 @@
+{
+  "workflowVersion": "1.2.0",
+  "backend": null,
+  "projectRoot": "<新制作项目绝对路径>",
+  "brief": {
+    "referenceVideo": "<获授权参考视频绝对路径>",
+    "referenceCover": "",
+    "targetPerson": "<获授权人物说明>",
+    "targetBrand": "<准确品牌；不用则空字符串>",
+    "targetProject": "<准确项目名；不用则空字符串>",
+    "targetScript": "<完整逐字稿>",
+    "voiceSource": null,
+    "targetDurationSeconds": null,
+    "aspectRatio": null,
+    "fps": null,
+    "subtitles": null,
+    "coverHoldFrames": null
+  },
+  "references": [],
+  "generation": {
+    "canonicalModel": null,
+    "mode": null,
+    "parameters": {},
+    "providerConfigPath": null,
+    "plannedSubmissions": null
+  },
+  "authorization": {
+    "materialUpload": null,
+    "generation": null,
+    "creditCeiling": null,
+    "gpuHourlyYuanCeiling": null,
+    "totalYuanCeiling": null,
+    "coveredServices": []
+  },
+  "outputs": [],
+  "editPlan": [],
+  "qa": {
+    "inputSpecs": false,
+    "identity": false,
+    "backgroundText": false,
+    "subtitles": false,
+    "audioWordsAndContinuity": false,
+    "cutsAndBookends": false,
+    "actualCoverFrames": false,
+    "streamDurationsAndFrames": false,
+    "fullDecode": false,
+    "watchedAndListened": false,
+    "cloudStopped": null,
+    "limitations": []
+  }
+}

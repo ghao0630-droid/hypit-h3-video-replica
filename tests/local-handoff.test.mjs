@@ -21,6 +21,65 @@ test('usage diff separates baseline and cumulative use without calling a provide
   const result = JSON.parse(succeeded(call(['usage-diff', '--before', before, '--after', after])));
   assert.equal(result.usageSeconds, 964); assert.equal(result.instanceUsageEstimateYuan, 0.856889);
   assert.equal(result.isSettledInvoice, false); assert.equal(result.excludesOtherFees, true);
+  assert.equal(result.observationTimeOrderVerified, false);
+  assert.equal(result.beforeCheckedAt, null); assert.equal(result.afterCheckedAt, null);
+});
+
+test('usage estimate overflow cannot succeed with a null cost', async () => {
+  const dir = await fixture(); const before = join(dir, 'before.json'); const after = join(dir, 'after.json');
+  await json(before, { resourceId: 'fixture', usageSeconds: 0, instanceHourlyYuan: 1e308 });
+  await json(after, { resourceId: 'fixture', usageSeconds: 36000, instanceHourlyYuan: 1e308 });
+  const result = call(['usage-diff', '--before', before, '--after', after]);
+  refused(result); assert.equal(result.stdout, ''); assert.match(result.stderr, /overflow/);
+});
+
+test('unsafe usage magnitude is refused in snapshots and differences', async () => {
+  const dir = await fixture(); const before = join(dir, 'before.json'); const after = join(dir, 'after.json');
+  await json(before, { resourceId: 'fixture', usageSeconds: 0, instanceHourlyYuan: 3.2 });
+  await json(after, { resourceId: 'fixture', usageSeconds: Number.MAX_SAFE_INTEGER + 1, instanceHourlyYuan: 3.2 });
+  refused(call(['usage-diff', '--before', before, '--after', after]));
+  const input = { ok: true, data: { Instances: [{ UHostId: 'fixture', UsageSeconds: Number.MAX_SAFE_INTEGER + 1, InstancePrice: 3.2 }] } };
+  refused(call(['usage-snapshot', '--resource-id', 'fixture', '--output', join(dir, 'snapshot.json')], JSON.stringify(input)));
+});
+
+test('reversed snapshot observation times are refused even with increasing usage', async () => {
+  const dir = await fixture(); const before = join(dir, 'before.json'); const after = join(dir, 'after.json');
+  await json(before, { resourceId: 'fixture', usageSeconds: 371, instanceHourlyYuan: 3.2, checkedAt: '2026-09-20T12:00:00Z' });
+  await json(after, { resourceId: 'fixture', usageSeconds: 1335, instanceHourlyYuan: 3.2, checkedAt: '2026-09-20T11:00:00Z' });
+  const result = call(['usage-diff', '--before', before, '--after', after]);
+  refused(result); assert.match(result.stderr, /time reversed/);
+});
+
+test('time order uses timezone-aware instants and preserves zero or fractional readings', async () => {
+  const dir = await fixture(); const before = join(dir, 'before.json'); const after = join(dir, 'after.json');
+  await json(before, { resourceId: 'fixture', usageSeconds: 0, instanceHourlyYuan: 3.2, checkedAt: '2026-09-20T20:00:00+08:00' });
+  await json(after, { resourceId: 'fixture', usageSeconds: 964.5, instanceHourlyYuan: 3.2, checkedAt: '2026-09-20T12:16:05Z' });
+  const result = JSON.parse(succeeded(call(['usage-diff', '--before', before, '--after', after])));
+  assert.equal(result.observationTimeOrderVerified, true); assert.equal(result.usageSeconds, 964.5);
+  assert.equal(result.instanceUsageEstimateYuan, 0.857333); assert.equal(result.isSettledInvoice, false);
+});
+
+test('partially missing observation times cannot be labeled a verified window', async () => {
+  const dir = await fixture(); const before = join(dir, 'before.json'); const after = join(dir, 'after.json');
+  await json(before, { resourceId: 'fixture', usageSeconds: 0, instanceHourlyYuan: 3.2 });
+  await json(after, { resourceId: 'fixture', usageSeconds: 10, instanceHourlyYuan: 3.2, checkedAt: '2026-09-20T12:00:00Z' });
+  refused(call(['usage-diff', '--before', before, '--after', after]));
+});
+
+test('malformed or impossible observation times do not normalize into valid dates', async () => {
+  const dir = await fixture(); const before = join(dir, 'before.json'); const after = join(dir, 'after.json');
+  await json(before, { resourceId: 'fixture', usageSeconds: 0, instanceHourlyYuan: 3.2, checkedAt: '2026-02-01T00:00:00Z' });
+  for (const checkedAt of [null, true, '', '2026-02-30T00:00:00Z', '2026-02-10T24:00:00Z', '2026-02-10T00:00:00', '2026-02-10T00:00:00+24:00']) {
+    await json(after, { resourceId: 'fixture', usageSeconds: 10, instanceHourlyYuan: 3.2, checkedAt });
+    refused(call(['usage-diff', '--before', before, '--after', after]));
+  }
+});
+
+test('duplicate selected resource records cannot silently choose a billing value', async () => {
+  const dir = await fixture(); const output = join(dir, 'snapshot.json');
+  const record = { UHostId: 'fixture', UsageSeconds: 100, InstancePrice: 3.2 };
+  const result = call(['usage-snapshot', '--resource-id', 'fixture', '--output', output], JSON.stringify({ ok: true, data: { Instances: [record, { ...record, UsageSeconds: 500 }] } }));
+  refused(result); assert.match(result.stderr, /exactly once/);
 });
 
 test('usage diff rejects resource, rate and counter mismatches', async () => {

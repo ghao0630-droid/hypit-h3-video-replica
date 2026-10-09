@@ -2,9 +2,9 @@
 // Local-only preflight. No account queries, network calls or credential files.
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { access, readFile, realpath } from 'node:fs/promises';
+import { access, readFile, realpath, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs, promisify } from 'node:util';
 
@@ -42,17 +42,27 @@ export async function checkPlugin(path, baseline) {
   return { ready: mismatches.length === 0, expectedCommit: baseline.commit, filesChecked: baseline.files.length, mismatches };
 }
 
-async function probe(command, args) {
+export async function probe(command, args, explicitPath) {
+  const locationMode = explicitPath === undefined ? 'PATH' : 'explicit';
+  let executable = command;
   try {
-    const result = await run(command, args, { timeout: 10000, maxBuffer: 262144 });
-    return { available: true, version: (result.stdout || result.stderr).trim().split('\n')[0].slice(0, 200) };
-  } catch (error) { return { available: false, reason: error.code === 'ENOENT' ? 'Not found in PATH' : 'Local version command failed' }; }
+    if (explicitPath !== undefined) {
+      if (!isAbsolute(explicitPath)) throw new Error('Explicit tool path must be absolute');
+      executable = await realpath(explicitPath);
+      if (!(await stat(executable)).isFile()) throw new Error('Explicit tool path must be a file');
+      await access(executable, constants.X_OK);
+    }
+    const result = await run(executable, args, { timeout: 10000, maxBuffer: 262144 });
+    return { available: true, locationMode, ...(locationMode === 'explicit' ? { executable } : {}), version: (result.stdout || result.stderr).trim().split('\n')[0].slice(0, 200) };
+  } catch (error) {
+    return { available: false, locationMode, reason: locationMode === 'explicit' ? 'Selected local tool path is invalid or its version command failed; no PATH fallback' : error.code === 'ENOENT' ? 'Not found in PATH' : 'Local version command failed' };
+  }
 }
 
 async function main() {
-  const { values } = parseArgs({ options: { help: { type: 'boolean', short: 'h' }, 'h3-plugin-root': { type: 'string' } } });
+  const { values } = parseArgs({ options: { help: { type: 'boolean', short: 'h' }, 'h3-plugin-root': { type: 'string' }, 'ffprobe-bin': { type: 'string' }, 'hypit-bin': { type: 'string' } } });
   if (values.help) {
-    console.log('Usage: node doctor.mjs [--h3-plugin-root PATH]\nLocal versions and public plugin files only; no credentials, APIs or GPU actions.');
+    console.log('Usage: node doctor.mjs [--h3-plugin-root PATH] [--ffprobe-bin ABSOLUTE_PATH] [--hypit-bin ABSOLUTE_PATH]\nLocal versions and public plugin files only; no credentials, APIs or GPU actions. Explicit paths never fall back to PATH.');
     return;
   }
   const commands = {
@@ -61,7 +71,7 @@ async function main() {
     ffprobe: ['ffprobe', ['-version']], compshare: ['compshare', ['--version']],
     hypit: ['hypit', ['--version']],
   };
-  const tools = Object.fromEntries(await Promise.all(Object.entries(commands).map(async ([name, args]) => [name, await probe(...args)])));
+  const tools = Object.fromEntries(await Promise.all(Object.entries(commands).map(async ([name, args]) => [name, await probe(...args, values[`${name}-bin`])])));
   const baseline = JSON.parse(await readFile(join(skillRoot, 'assets/h3-baseline.json'), 'utf8'));
   let plugin;
   try { plugin = await checkPlugin(values['h3-plugin-root'], baseline); }
@@ -77,7 +87,7 @@ async function main() {
   console.log(JSON.stringify({
     node: process.version, tools, plugin, issues,
     readyForLocalPreparation: issues.length === 0,
-    warnings: tools.hypit.available ? [] : ['Hypit CLI is optional and not found; use the local FFmpeg route'],
+    warnings: tools.hypit.available ? [] : ['Hypit CLI is optional and unavailable in the selected location; use the local FFmpeg route'],
     accountVerified: false, inventoryVerified: false, generationVerified: false, paidActions: 0,
   }, null, 2));
   if (issues.length) process.exitCode = 1;
