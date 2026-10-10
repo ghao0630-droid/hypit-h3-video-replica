@@ -13,9 +13,10 @@ export const publishFiles = [
   `${skill}/SKILL.md`, `${skill}/agents/openai.yaml`,
   `${skill}/assets/h3-baseline.json`, `${skill}/assets/task.example.json`, `${skill}/assets/workflow.example.json`,
   `${skill}/scripts/doctor.mjs`, `${skill}/scripts/local-handoff.mjs`,
-  `${skill}/references/installation.md`, `${skill}/references/tutorial.md`, `${skill}/references/verification.md`,
+  `${skill}/references/hosted-h3.md`, `${skill}/references/installation.md`, `${skill}/references/tutorial.md`, `${skill}/references/verification.md`,
   `${skill}/references/workflow.md`, `${skill}/references/seedance.md`, `${skill}/references/design-presentation.md`, `${skill}/references/lessons.md`,
-  'tests/doctor.test.mjs', 'tests/local-handoff.test.mjs', 'tools/verify-package.mjs',
+  `${skill}/scripts/hosted-h3.mjs`,
+  'tests/doctor.test.mjs', 'tests/hosted-h3.test.mjs', 'tests/local-handoff.test.mjs', 'tools/verify-package.mjs',
 ].sort();
 
 const ignored = new Set(['.git', 'agent_memory', 'verification-local']);

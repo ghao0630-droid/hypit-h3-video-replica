@@ -1,6 +1,6 @@
 ---
 name: hypit-h3-video-replica
-description: 用Hypit组织参考视频改编，按用户选择调用Seedance即梦CLI、云端GPU MiniMax H3或设计图与人物表演路线，并完成本地剪辑、信息替换检查和交付验收。适用于安装或执行这套复刻流程，不保证逐帧换脸或批量产能。
+description: 用Hypit组织参考视频改编，按用户选择调用Seedance即梦CLI、云端GPU MiniMax H3、优云智算托管H3视频API或设计图与人物表演路线，并完成本地剪辑、信息替换检查和交付验收。适用于安装或执行这套复刻流程，不保证逐帧换脸或批量产能。
 ---
 
 # Hypit 多路线视频复刻
@@ -13,6 +13,7 @@ description: 用Hypit组织参考视频改编，按用户选择调用Seedance即
 
 - Seedance即梦路线：读取[Seedance指南](references/seedance.md)，按当前CLI schema与模型目录选模式、引用和参数。
 - 云端GPU H3路线：读取[完整H3教程](references/tutorial.md)，使用完整上游插件。`doctor.mjs`只检查这条路线。
+- 托管 HTTPS H3：读取[托管 H3](references/hosted-h3.md)，使用`scripts/hosted-h3.mjs`。出站只有443时走这条。不要因为 doctor 缺少 SSH 或插件就改去开机。默认分辨率是768P。
 - 已确认设计图与统一旁白：读取[设计图展示指南](references/design-presentation.md)，人物表演只承担需要的段落。
 - 安装请求：读取[安装说明](references/installation.md)，按实际路线检查依赖。没有选择H3时不要求CompShare或H3插件。
 
@@ -24,7 +25,7 @@ description: 用Hypit组织参考视频改编，按用户选择调用Seedance即
 
 生成后独立检查人物、背景文字、字幕和声音。换字幕不能证明口播或招牌已换；短样成功不能代替全片检查。多段声音优先采用已确定的统一声音来源，不能靠同一提示词锁定声纹。
 
-保存原提交标识和真实artifact路径。观察中断或状态差异时先核对原任务，不盲目再次付费；H3已有prompt_id时恢复原任务，缺本地凭据也需核对服务端记录。结束或异常后确认实例停止。
+保存原提交标识和真实artifact路径。观察中断或状态差异时先核对原任务，不盲目再次付费；H3已有prompt_id时恢复原任务，缺本地凭据也需核对服务端记录。托管清单在请求前写入幂等键；已有task id时只查询和下载，不重新提交。结束或异常后，自建路线确认实例停止；托管路线确认任务终态和积分预占是否释放。
 
 按[避坑清单](references/lessons.md)检查烧录字幕、声音接缝、错人转场、首尾定格/重复、首帧封面和中文渲染。不要机械增加镜头、时长或重试次数。
 
