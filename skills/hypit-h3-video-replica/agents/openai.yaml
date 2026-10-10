@@ -1,4 +1,4 @@
 interface:
   display_name: "Hypit 视频复刻工作流"
-  short_description: "覆盖Seedance与云端H3，组织参考、分镜和本地剪辑，检查人物、声音、首尾与费用"
+  short_description: "覆盖Seedance、云端GPU H3与托管H3 API，组织参考、分镜和本地剪辑，检查人物、声音、首尾与费用"
   default_prompt: "使用 $hypit-h3-video-replica 先核对参考、素材、制作路线和本次授权，再完成生成与成片验收。"

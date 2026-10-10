@@ -35,10 +35,17 @@ git clone https://github.com/ghao0630-droid/hypit-h3-video-replica.git
 | 路线 | 已验证的制作方式 | 开始前读取 |
 | --- | --- | --- |
 | Seedance 2.5 | 即梦网页视频编辑／CLI生成，下载后在本地筛选与剪辑 | [Seedance指南](skills/hypit-h3-video-replica/references/seedance.md) |
-| MiniMax H3 | 本地脚本编排云端GPU上的H3，短镜头生成后下载组装 | [H3完整教程](skills/hypit-h3-video-replica/references/tutorial.md) |
+| MiniMax H3 自建 GPU | 本地脚本编排云端GPU上的H3，短镜头生成后下载组装 | [H3完整教程](skills/hypit-h3-video-replica/references/tutorial.md) |
+| MiniMax H3 托管 API | 只走 HTTPS 443 的优云智算视频任务接口；首帧用 Data URL | [托管 H3](skills/hypit-h3-video-replica/references/hosted-h3.md) |
 | 设计图＋人物短表演 | 确认过的设计图、统一配音、短人物表演与本地编排 | [设计图展示指南](skills/hypit-h3-video-replica/references/design-presentation.md) |
 
-路线由用户目标和已有素材决定，不自动更换已选服务。H3的“本地”指编排、下载和后期；这里的案例在云端GPU进行推理，没有证明Mac本机GPU运行H3。不同案例的外部CLI、Hypit Runtime与FFmpeg各自承担部分步骤，不是所有环节都由Hypit原生执行。
+路线由用户目标和已有素材决定，不自动更换已选服务。H3的“本地”指编排、下载和后期。自建路线在云端GPU推理；托管路线调用优云智算的 HTTPS 视频 API。两条都没有证明 Mac 本机 GPU 运行 H3。不同案例的外部CLI、Hypit Runtime与FFmpeg各自承担部分步骤，不是所有环节都由Hypit原生执行。
+
+## 托管 H3（仅 HTTPS）
+
+出站只能走 443、或不想把肖像先传到第三方图床时，用 [hosted-h3.mjs](skills/hypit-h3-video-replica/scripts/hosted-h3.mjs)。密钥放在 `COMPSHARE_MINIMAX_API_KEY`（`sk-ml-` 开头），不要出现在命令行、清单或日志里。默认分辨率是 **768P**；1080P 和 2K 必须显式指定。口播换人用重复的 `--reference-image`（本人照片、空场景、可选的上一段尾帧），不要只把上一段尾帧当成下一段 `--first-frame`。
+
+提交前要有 `--max-points`（或配置里的 `maxPoints`）和 `--yes`。估算超过上限就拒绝。幂等键和 `taskId` 字段在任何网络请求之前写入清单；响应丢失时用同一个键恢复，已经有任务号时 `resume` 只查询和下载。积分在提交时预占，失败或取消后释放。官方单价是 480P 5 积分/秒、768P 10、1080P 19、2K 20、4K 22；套餐口径 1100 积分 = ¥9.90。2026-10-10 一次 5 秒 480P 实测扣了 20 积分。估算不是账单。完整步骤，以及和 SSH 自建的取舍，见[托管 H3](skills/hypit-h3-video-replica/references/hosted-h3.md)。
 
 ## 统一制作与交付
 

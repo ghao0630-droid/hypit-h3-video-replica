@@ -1,6 +1,6 @@
 # 安装与环境检查
 
-先按[路线入口](workflow.md)决定依赖。以下第2—4节中的CompShare、SSH、H3插件和doctor基线只用于H3路线；Seedance不需要安装这些工具。
+先按[路线入口](workflow.md)决定依赖。以下第2—4节中的CompShare、SSH、H3插件和doctor基线只用于自建 GPU。托管 API 只需要 Node.js 22.20 和 `COMPSHARE_MINIMAX_API_KEY`，不需要 SSH 或插件，见[托管 H3](hosted-h3.md)。Seedance不需要这些 H3 工具。
 
 Seedance路线先核对可用即梦CLI的`--version`与`schema`，安装或登录按使用者实际获得的官方渠道执行；本仓库不猜安装源。设计图/人物表演路线按已选配音与表演服务配置账号。各路线都核对FFmpeg/FFprobe及可查看成片的宿主。
 
@@ -92,5 +92,17 @@ node "$H3_SKILL_ROOT/scripts/doctor.mjs" --h3-plugin-root "$H3_PLUGIN_ROOT" \
 ```
 
 环境检查只运行本机版本命令、读取插件元数据并比对公开文件哈希。不会读取 API Key、验证账号、请求价格、启动 GPU 或生成视频。`readyForLocalPreparation=true` 只表示可以开始本地准备。
+
+## 5. 托管 API 不检查 SSH
+
+托管路线不要用上面的 doctor 结果决定能否开始。帮助和估算都不访问网络：
+
+```bash
+export H3_SKILL_ROOT="<包含SKILL.md的技能目录绝对路径>"
+node "$H3_SKILL_ROOT/scripts/hosted-h3.mjs" --help
+node "$H3_SKILL_ROOT/scripts/hosted-h3.mjs" estimate --resolution 768P --duration 5
+```
+
+密钥放在 `COMPSHARE_MINIMAX_API_KEY`。`points` 和 `submit` 才会请求优云智算。提交规则、费用表和幂等恢复见[托管 H3](hosted-h3.md)。
 
 完成安装后开新一轮对话。开始制作前再准备参考视频、肖像、逐字台词、可用首帧编辑工具，以及本次价格与费用授权。
