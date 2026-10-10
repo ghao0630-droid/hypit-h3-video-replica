@@ -420,3 +420,79 @@ test('CLI submit retries the saved key after a dropped response, then waits and 
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+function pngByte(byte) {
+  return Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, byte]);
+}
+
+test('reference images are data URLs with role reference_image and resume checks every hash before reusing the key', async () => {
+  const dir = await fixture();
+  const manifestPath = join(dir, 'outputs', 'clip', 'manifest.json');
+  const person = pngByte(1);
+  const scene = pngByte(2);
+  const previous = pngByte(3);
+  const prompt = '人物以第一张图为准，背景以第二张空场景为准。';
+  let posts = 0;
+  let savedKey;
+  const fetchImpl = async (url, init) => {
+    const onDisk = JSON.parse(await readFile(manifestPath, 'utf8'));
+    savedKey = onDisk.idempotencyKey;
+    assert.deepEqual(onDisk.referenceImages.map((item) => item.sha256), [toDataUrl(person).sha256, toDataUrl(scene).sha256, toDataUrl(previous).sha256]);
+    assert.equal(onDisk.firstFrameSha256, null);
+    assert.equal(onDisk.imageMode, 'reference_image');
+    assert.equal(JSON.stringify(onDisk).includes('base64'), false);
+    if (String(url).endsWith('/point_usage_summary')) return jsonResponse(balance(200));
+    posts += 1;
+    assert.equal(init.headers['Idempotency-Key'], savedKey);
+    const body = JSON.parse(init.body);
+    assert.deepEqual(body.content.map((item) => item.role || item.type), ['text', 'reference_image', 'reference_image', 'reference_image']);
+    assert.equal(body.content[1].type, 'image_url');
+    assert.equal(body.content[1].image_url.url, toDataUrl(person).url);
+    assert.equal(body.content[2].image_url.url, toDataUrl(scene).url);
+    assert.equal(body.content[3].image_url.url, toDataUrl(previous).url);
+    assert.match(body.content[0].text, /普通话/);
+    if (posts === 1) throw new Error('socket hang up');
+    return jsonResponse({ task_id: 'hosted-task-005' });
+  };
+  await assert.rejects(() => submitNew({
+    prompt, referenceImages: [person, scene, previous], spokenLanguage: '普通话', manifestPath, maxPoints: 80, yes: true, apiKey: secret, fetchImpl,
+  }), /Manifest kept/);
+  let calls = 0;
+  await assert.rejects(() => resumeSubmission({
+    manifestPath, prompt, referenceImages: [scene, person, previous], spokenLanguage: '普通话', apiKey: secret,
+    fetchImpl: async () => { calls += 1; throw new Error('must not post'); },
+  }), /Reference image 1 does not match/);
+  await assert.rejects(() => resumeSubmission({
+    manifestPath, prompt, referenceImages: [person, scene, previous], spokenLanguage: '英语', apiKey: secret,
+    fetchImpl: async () => { calls += 1; throw new Error('must not post'); },
+  }), /Spoken language does not match/);
+  assert.equal(calls, 0);
+  const created = await resumeSubmission({
+    manifestPath, prompt, referenceImages: [person, scene, previous], spokenLanguage: '普通话', apiKey: secret, fetchImpl,
+  });
+  assert.equal(created.taskId, 'hosted-task-005');
+  assert.equal(created.idempotencyKey, savedKey);
+  assert.equal(created.imageMode, 'reference_image');
+  assert.equal(posts, 2);
+});
+
+test('first frame and reference images are mutually exclusive and at most nine references are accepted', async () => {
+  const dir = await fixture();
+  const manifestPath = join(dir, 'outputs', 'clip', 'manifest.json');
+  const promptPath = join(dir, 'prompt.txt');
+  const frame = join(dir, 'frame.png');
+  await mkdir(dirname(manifestPath), { recursive: true });
+  await writeFile(promptPath, '不要混用两种图像模式。');
+  await writeFile(frame, png);
+  const both = refused(call(['submit', '--prompt-file', promptPath, '--first-frame', frame, '--reference-image', frame, '--manifest', manifestPath, '--max-points', '80', '--yes']));
+  assert.match(both.stderr, /not both/);
+  assert.equal(both.stderr.includes('base64'), false);
+  const tooMany = ['submit', '--prompt-file', promptPath, '--manifest', manifestPath, '--max-points', '80', '--yes'];
+  for (let index = 0; index < 10; index += 1) tooMany.push('--reference-image', frame);
+  assert.match(refused(call(tooMany)).stderr, /At most 9/);
+  await assert.rejects(() => submitNew({
+    prompt: '混用', firstFrame: png, referenceImages: [pngByte(9)], manifestPath, maxPoints: 80, yes: true, apiKey: secret,
+    fetchImpl: async () => { throw new Error('must not post'); },
+  }), /not both/);
+  await assert.rejects(() => stat(manifestPath), (error) => error.code === 'ENOENT');
+});

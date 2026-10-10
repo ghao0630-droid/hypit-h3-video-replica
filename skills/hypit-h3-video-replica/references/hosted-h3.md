@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 网络 | 只需要出站 HTTPS 443 | 需要 SSH，以及插件里的上传和回传 |
 | 推理位置 | 优云智算视频任务 API | 自己开机的云端 GPU / ComfyUI |
-| 肖像 | 首帧放进请求里的 Data URL，不先上传到第三方图床 | 按插件流程把素材送到实例 |
+| 肖像 | 首帧或最多 9 张参考图的 Data URL，不先上传到第三方图床 | 按插件流程把素材送到实例 |
 | 计费 | 按分辨率和秒数扣积分；提交时预占，失败或取消后释放 | 按实例小时价和用量计 GPU 费用 |
 | 本地检查 | 不使用 `doctor.mjs` 的插件基线 | `doctor.mjs` 只服务这条路线 |
 
@@ -74,6 +74,49 @@ node "$H3_SKILL_ROOT/scripts/hosted-h3.mjs" submit \
 
 需要无声成片时加 `--mute`。竖屏口播常用 `--ratio 9:16` 或 `--ratio adaptive`。省略 `--resolution` 时发送的是 `768P`，不是 `480P`。1080P 和 2K 要写成 `--resolution 1080P`、`--resolution 2K`。
 
+## 口播换人用参考图
+
+换人口播不要把上一段的最后一帧只交给下一段当 `--first-frame`。这样接下去，人物和背景都会漂。每一段都用 `--reference-image`，而且不要和 `--first-frame` 一起用。托管接口不允许同一个任务里同时出现 `first_frame` 和 `reference_image`；脚本会直接拒绝。
+
+每段按这个顺序重复传入，最多 9 张：
+
+1. 要换成的本人照片。
+2. 没有人的空场景，用来钉住背景。
+3. 可选：上一段成片的最后一帧。它仍然是 `reference_image`，不是下一秒的首帧。
+
+请求里的字段是 `type: image_url`、`image_url.url`（Data URL）和 `role: reference_image`。顺序就是 `<Picture 1>`、`<Picture 2>` 的编号。接口不认识 `<Image 1>`、`@图片1` 或文件名。
+
+```bash
+node "$H3_SKILL_ROOT/scripts/hosted-h3.mjs" submit \
+  --prompt-file "$H3_PROJECT_ROOT/prompts/segment.txt" \
+  --reference-image "$H3_PROJECT_ROOT/assets/portraits/person.png" \
+  --reference-image "$H3_PROJECT_ROOT/assets/scenes/empty.png" \
+  --reference-image "$H3_PROJECT_ROOT/assets/keyframes/segment-00-last.png" \
+  --spoken-language "普通话" \
+  --manifest "$H3_PROJECT_ROOT/outputs/h3-hosted/segment-01/manifest.json" \
+  --resolution 768P \
+  --duration 5 \
+  --ratio 9:16 \
+  --max-points 80 \
+  --yes
+```
+
+提示词要写明每张图负责什么。例如：人物外观以 `<Picture 1>` 为准；背景和光线以 `<Picture 2>` 的空场景为准，不要把路人带进来；`<Picture 3>` 只参考景别和动作，不改背景。
+
+各段对白保持同一种口语语言。`--spoken-language` 会在提示词末尾加上同一句「对白只使用该语言，各段保持同一种口语语言，不要中途换语言。」每一段传入同一个值，例如 `--spoken-language 普通话`。不传这个参数时，脚本不会改提示词，需要自己把这条约定写进每一段。
+
+清单按同样顺序记下每张参考图的 SHA-256。`taskId` 还是空时，`resume` 会先核对这些哈希和口语语言，不一致就拒绝，不会拿原来的幂等键去提交另一组图。
+
+```bash
+node "$H3_SKILL_ROOT/scripts/hosted-h3.mjs" resume \
+  --manifest "$H3_PROJECT_ROOT/outputs/h3-hosted/segment-01/manifest.json" \
+  --prompt-file "$H3_PROJECT_ROOT/prompts/segment.txt" \
+  --reference-image "$H3_PROJECT_ROOT/assets/portraits/person.png" \
+  --reference-image "$H3_PROJECT_ROOT/assets/scenes/empty.png" \
+  --reference-image "$H3_PROJECT_ROOT/assets/keyframes/segment-00-last.png" \
+  --spoken-language "普通话"
+```
+
 成功时标准输出里有 `taskId`。接着查询、等待和下载。下载目录必须位于项目的 `outputs` 路径下；视频地址不会写入清单。
 
 ```bash
@@ -94,7 +137,7 @@ node "$H3_SKILL_ROOT/scripts/hosted-h3.mjs" download \
 
 脚本在任何网络请求之前，把清单写到磁盘并刷盘。此时已经有幂等键，`taskId` 仍是 `null`。这样进程在响应写回之前崩溃，也不会另起一个新键。
 
-1. 清单里还没有 `taskId`：`resume` 使用清单中的同一个键再次提交。提示词和首帧必须与清单里的哈希一致，否则拒绝，避免在第一次请求其实没送达时换了内容。
+1. 清单里还没有 `taskId`：`resume` 使用清单中的同一个键再次提交。提示词、口语语言、首帧或每一张参考图的 SHA-256 必须和清单一致，否则拒绝，避免在第一次请求其实没送达时换了内容。
 2. 清单里已经有 `taskId`：`resume`、`status`、`wait`、`download` 只查询或下载，不再 POST。
 3. 任务失败或取消后，积分会释放，但这个 `taskId` 仍然留着。再生成一条要新建清单，让脚本生成新的幂等键。不要为了重试去删一个可能已经被平台接受的清单。
 4. 余额不足时，清单会留下且 `taskId` 为 `null`，创建请求没有发出。补足积分后对同一清单 `resume`。

@@ -17,6 +17,7 @@ export const CLI_RESOLUTIONS = ['768P', '1080P', '2K'];
 export const PACKAGE_POINTS = 1100;
 export const PACKAGE_YUAN = 9.9;
 export const MAX_IMAGE_BYTES = 30 * 1024 * 1024;
+export const MAX_REFERENCE_IMAGES = 9;
 export const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
 export const MANIFEST_KIND = 'compshare-hosted-minimax-h3';
 export const OBSERVED_480P_5S = { date: '2026-10-10', resolution: '480P', durationSeconds: 5, documentedPoints: 25, chargedPoints: 20 };
@@ -24,12 +25,15 @@ export const OBSERVED_480P_5S = { date: '2026-10-10', resolution: '480P', durati
 const usage = `Hosted CompShare MiniMax H3 (HTTPS, no SSH). Default resolution is 768P.
   points [--base-url URL]
   estimate [--resolution 768P] [--duration 5] [--count 1]
-  submit --prompt-file PATH --first-frame PATH --manifest PATH (--max-points N | --config PATH) --yes
+  submit --prompt-file PATH (--first-frame PATH | --reference-image PATH [--reference-image PATH...]) --manifest PATH
+         (--max-points N | --config PATH) --yes [--spoken-language TEXT]
          [--resolution 768P] [--duration 5] [--ratio 16:9] [--mute] [--base-url URL] [--debug]
   status (--manifest PATH | --task-id ID) [--base-url URL]
   wait --manifest PATH [--timeout 900] [--base-url URL]
   download --manifest PATH --output-dir PROJECT/outputs/... [--base-url URL]
-  resume --manifest PATH [--prompt-file PATH --first-frame PATH] [--base-url URL] [--debug]
+  resume --manifest PATH [--prompt-file PATH (--first-frame PATH | --reference-image PATH...)] [--spoken-language TEXT]
+         [--base-url URL] [--debug]
+--first-frame and --reference-image cannot be combined. At most 9 reference images.
 The API key is COMPSHARE_MINIMAX_API_KEY and is never printed. Estimate is not an invoice.`;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -124,7 +128,7 @@ export function estimateCost({ resolution = DEFAULT_RESOLUTION, duration = DEFAU
 }
 
 export function detectImageMime(bytes) {
-  if (!Buffer.isBuffer(bytes)) throw new Error('First frame must be a file buffer.');
+  if (!Buffer.isBuffer(bytes)) throw new Error('Image must be a file buffer.');
   if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) return 'image/png';
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
   if (bytes.length >= 12 && bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
@@ -133,8 +137,8 @@ export function detectImageMime(bytes) {
 
 export function toDataUrl(bytes, { maxBytes = MAX_IMAGE_BYTES } = {}) {
   const mime = detectImageMime(bytes);
-  if (!mime) throw new Error('First frame must be PNG, JPEG, or WebP.');
-  if (bytes.length > maxBytes) throw new Error(`First frame exceeds ${maxBytes} bytes.`);
+  if (!mime) throw new Error('Image must be PNG, JPEG, or WebP.');
+  if (bytes.length > maxBytes) throw new Error(`Image exceeds ${maxBytes} bytes.`);
   const url = `data:${mime};base64,${bytes.toString('base64')}`;
   if (Buffer.byteLength(url) > 60 * 1024 * 1024) throw new Error('Data URL exceeds the request body budget.');
   return { url, mime, sha256: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length };
@@ -209,18 +213,46 @@ export function publicTask(task) {
   };
 }
 
-export function buildCreateBody({ prompt, dataUrl, resolution, duration, ratio, muteAudio }) {
-  return {
-    model: 'MiniMax-H3',
-    content: [
-      { type: 'text', text: prompt },
-      { type: 'image_url', image_url: { url: dataUrl }, role: 'first_frame' },
-    ],
-    resolution,
-    duration,
-    ratio,
-    mute_audio: muteAudio,
-  };
+export function assertSpokenLanguage(value) {
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string' || value !== value.trim() || /[\r\n\u0000]/.test(value) || [...value].length > 40) {
+    throw new Error('--spoken-language must be one line of at most 40 characters.');
+  }
+  return value;
+}
+
+export function applySpokenLanguage(prompt, spokenLanguage) {
+  const language = assertSpokenLanguage(spokenLanguage);
+  if (!language) return prompt;
+  return `${prompt}\n\n对白只使用${language}，各段保持同一种口语语言，不要中途换语言。`;
+}
+
+export function prepareImages({ firstFrame = null, referenceImages = [] } = {}) {
+  if (!Array.isArray(referenceImages)) throw new Error('referenceImages must be an array.');
+  const hasFirst = firstFrame != null;
+  if (hasFirst && referenceImages.length > 0) throw new Error('Use either --first-frame or --reference-image, not both. The hosted API does not allow first_frame and reference_image in the same task.');
+  if (!hasFirst && referenceImages.length === 0) throw new Error('Pass --first-frame, or 1 to 9 --reference-image files.');
+  if (referenceImages.length > MAX_REFERENCE_IMAGES) throw new Error('At most 9 --reference-image files are allowed.');
+  if (hasFirst) return { imageMode: 'first_frame', frame: toDataUrl(firstFrame), references: [] };
+  const references = referenceImages.map((bytes, index) => {
+    try { return toDataUrl(bytes); }
+    catch (error) { throw new Error(`Reference image ${index + 1}: ${error.message}`); }
+  });
+  const budget = references.reduce((sum, item) => sum + Buffer.byteLength(item.url), 0);
+  if (budget > 60 * 1024 * 1024) throw new Error('Reference images exceed the request body budget.');
+  return { imageMode: 'reference_image', frame: null, references };
+}
+
+export function buildCreateBody({ prompt, dataUrl, firstFrameUrl = dataUrl, referenceUrls = [], resolution, duration, ratio, muteAudio }) {
+  const references = referenceUrls ?? [];
+  if (firstFrameUrl && references.length > 0) throw new Error('Use either --first-frame or --reference-image, not both. The hosted API does not allow first_frame and reference_image in the same task.');
+  const content = [{ type: 'text', text: prompt }];
+  if (firstFrameUrl) content.push({ type: 'image_url', image_url: { url: firstFrameUrl }, role: 'first_frame' });
+  else if (references.length > 0) {
+    if (references.length > MAX_REFERENCE_IMAGES) throw new Error('At most 9 --reference-image files are allowed.');
+    for (const url of references) content.push({ type: 'image_url', image_url: { url }, role: 'reference_image' });
+  } else throw new Error('Pass --first-frame, or 1 to 9 --reference-image files.');
+  return { model: 'MiniMax-H3', content, resolution, duration, ratio, mute_audio: muteAudio };
 }
 
 function sha256Text(value) {
@@ -347,11 +379,29 @@ export async function loadManifest(path) {
   assertDuration(value.duration);
   assertRatio(value.ratio);
   if (typeof value.muteAudio !== 'boolean') throw new Error('Manifest mute flag is invalid.');
-  if (typeof value.promptSha256 !== 'string' || typeof value.firstFrameSha256 !== 'string') throw new Error('Manifest input hashes are missing.');
+  if (typeof value.promptSha256 !== 'string') throw new Error('Manifest input hashes are missing.');
+  if (value.spokenLanguage === undefined) value.spokenLanguage = null;
+  assertSpokenLanguage(value.spokenLanguage);
+  if (value.referenceImages == null) value.referenceImages = [];
+  if (!Array.isArray(value.referenceImages)) throw new Error('Manifest reference image hashes are invalid.');
+  if (value.imageMode == null) {
+    if (typeof value.firstFrameSha256 !== 'string') throw new Error('Manifest input hashes are missing.');
+    value.imageMode = 'first_frame';
+  }
+  if (value.imageMode === 'first_frame') {
+    if (typeof value.firstFrameSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(value.firstFrameSha256)) throw new Error('Manifest input hashes are missing.');
+    if (value.referenceImages.length !== 0) throw new Error('Manifest mixes first_frame and reference_image.');
+  } else if (value.imageMode === 'reference_image') {
+    if (value.firstFrameSha256 != null) throw new Error('Manifest mixes first_frame and reference_image.');
+    if (value.referenceImages.length < 1 || value.referenceImages.length > MAX_REFERENCE_IMAGES) throw new Error('Manifest reference image hashes are invalid.');
+    for (const item of value.referenceImages) {
+      if (!item || typeof item.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(item.sha256)) throw new Error('Manifest reference image hashes are invalid.');
+    }
+  } else throw new Error('Manifest image mode is invalid.');
   return value;
 }
 
-function manifestRecord({ prompt, frame, resolution, duration, ratio, muteAudio, estimate, maxPoints, origin }) {
+function manifestRecord({ prompt, images, resolution, duration, ratio, muteAudio, spokenLanguage, estimate, maxPoints, origin }) {
   return {
     manifestVersion: 1,
     kind: MANIFEST_KIND,
@@ -366,9 +416,12 @@ function manifestRecord({ prompt, frame, resolution, duration, ratio, muteAudio,
     duration,
     ratio,
     muteAudio,
+    spokenLanguage,
+    imageMode: images.imageMode,
     promptSha256: sha256Text(prompt),
-    firstFrameSha256: frame.sha256,
-    firstFrameMime: frame.mime,
+    firstFrameSha256: images.frame?.sha256 ?? null,
+    firstFrameMime: images.frame?.mime ?? null,
+    referenceImages: images.references.map((item) => ({ sha256: item.sha256, mime: item.mime })),
     estimatedPoints: estimate.estimatedPoints,
     estimatedYuan: estimate.estimatedYuan,
     maxPoints,
@@ -378,14 +431,22 @@ function manifestRecord({ prompt, frame, resolution, duration, ratio, muteAudio,
   };
 }
 
-async function finishSubmit({ manifestPath, manifest, prompt, frame, apiKey, fetchImpl, debugLog }) {
+async function finishSubmit({ manifestPath, manifest, prompt, frame, references, apiKey, fetchImpl, debugLog }) {
   const balance = await queryPoints({ origin: manifest.origin, apiKey, fetchImpl, debugLog });
   if (balance.availablePoints < manifest.estimatedPoints) {
     manifest.remoteStatus = 'blocked-insufficient-points';
     await writeManifest(manifestPath, manifest, { exclusive: false });
     throw new Error(`Available points ${balance.availablePoints} are below the estimate ${manifest.estimatedPoints}. No video task was submitted.`);
   }
-  const body = buildCreateBody({ prompt, dataUrl: frame.url, resolution: manifest.resolution, duration: manifest.duration, ratio: manifest.ratio, muteAudio: manifest.muteAudio });
+  const body = buildCreateBody({
+    prompt,
+    firstFrameUrl: frame?.url,
+    referenceUrls: (references ?? []).map((item) => item.url),
+    resolution: manifest.resolution,
+    duration: manifest.duration,
+    ratio: manifest.ratio,
+    muteAudio: manifest.muteAudio,
+  });
   const created = await requestJson({
     origin: manifest.origin, path: '/minimax/v2/video_generation', method: 'POST', apiKey, body,
     idempotencyKey: manifest.idempotencyKey, fetchImpl, debugLog,
@@ -406,6 +467,9 @@ async function finishSubmit({ manifestPath, manifest, prompt, frame, apiKey, fet
     maxPoints: manifest.maxPoints,
     resolution: manifest.resolution,
     durationSeconds: manifest.duration,
+    imageMode: manifest.imageMode,
+    referenceCount: manifest.referenceImages.length,
+    spokenLanguage: manifest.spokenLanguage,
     availablePointsBeforeSubmit: balance.availablePoints,
     cliWarnings: manifest.cliWarnings,
     isSettledInvoice: false,
@@ -413,17 +477,18 @@ async function finishSubmit({ manifestPath, manifest, prompt, frame, apiKey, fet
 }
 
 export async function submitNew({
-  prompt, firstFrame, manifestPath, maxPoints, yes = false, resolution = DEFAULT_RESOLUTION,
+  prompt, firstFrame = null, referenceImages = [], spokenLanguage = null, manifestPath, maxPoints, yes = false, resolution = DEFAULT_RESOLUTION,
   duration = DEFAULT_DURATION, ratio = DEFAULT_RATIO, muteAudio = false, origin = DEFAULT_ORIGIN,
   apiKey, fetchImpl = globalThis.fetch, debugLog = () => {},
 }) {
   if (typeof prompt !== 'string' || prompt.trim() === '') throw new Error('Prompt file is empty.');
-  const text = prompt.trim();
+  const language = assertSpokenLanguage(spokenLanguage);
+  const text = applySpokenLanguage(prompt.trim(), language);
   if ([...text].length > 7000) throw new Error('Prompt exceeds 7000 characters.');
   if (typeof manifestPath !== 'string' || !manifestPath.endsWith('.json')) throw new Error('Manifest path must end with .json.');
   if (!Number.isInteger(maxPoints) || maxPoints < 0) throw new Error('maxPoints must be a non-negative integer.');
   if (typeof muteAudio !== 'boolean') throw new Error('mute must be boolean.');
-  const frame = toDataUrl(firstFrame);
+  const images = prepareImages({ firstFrame, referenceImages });
   const selectedResolution = assertResolution(resolution);
   const selectedDuration = assertDuration(duration);
   const selectedRatio = assertRatio(ratio);
@@ -432,28 +497,40 @@ export async function submitNew({
   if (!yes) return { submitted: false, reason: 'missing-yes', estimate };
   requireKey(apiKey);
   const manifest = manifestRecord({
-    prompt: text, frame, resolution: selectedResolution, duration: selectedDuration, ratio: selectedRatio,
-    muteAudio, estimate, maxPoints, origin: canonicalOrigin(origin),
+    prompt: text, images, resolution: selectedResolution, duration: selectedDuration, ratio: selectedRatio,
+    muteAudio, spokenLanguage: language, estimate, maxPoints, origin: canonicalOrigin(origin),
   });
   // The idempotency key and taskId field are durable before any request, so a crash cannot mint a second key.
   await writeManifest(manifestPath, manifest, { exclusive: true });
   try {
-    return await finishSubmit({ manifestPath, manifest, prompt: text, frame, apiKey, fetchImpl, debugLog });
+    return await finishSubmit({ manifestPath, manifest, prompt: text, frame: images.frame, references: images.references, apiKey, fetchImpl, debugLog });
   } catch (error) {
     throw new Error(`${redactText(error.message)} Manifest kept for resume.`);
   }
 }
 
-function sameInputs(manifest, prompt, firstFrame) {
-  const text = prompt.trim();
-  const frame = toDataUrl(firstFrame);
-  if (sha256Text(text) !== manifest.promptSha256 || frame.sha256 !== manifest.firstFrameSha256 || frame.mime !== manifest.firstFrameMime) {
-    throw new Error('Prompt or first frame does not match the manifest. Refusing to submit different inputs with the saved key.');
+function sameInputs(manifest, prompt, firstFrame, referenceImages, spokenLanguage) {
+  const language = assertSpokenLanguage(spokenLanguage);
+  if (language !== manifest.spokenLanguage) throw new Error('Spoken language does not match the manifest. Refusing to reuse the idempotency key.');
+  const text = applySpokenLanguage(prompt.trim(), manifest.spokenLanguage);
+  if (sha256Text(text) !== manifest.promptSha256) throw new Error('Prompt does not match the manifest. Refusing to reuse the idempotency key.');
+  const images = prepareImages({ firstFrame: firstFrame ?? null, referenceImages: referenceImages ?? [] });
+  if (images.imageMode !== manifest.imageMode) throw new Error('Image mode does not match the manifest. Refusing to reuse the idempotency key.');
+  if (images.imageMode === 'first_frame') {
+    if (images.frame.sha256 !== manifest.firstFrameSha256 || images.frame.mime !== manifest.firstFrameMime) {
+      throw new Error('First frame does not match the manifest. Refusing to reuse the idempotency key.');
+    }
+  } else {
+    if (images.references.length !== manifest.referenceImages.length) throw new Error('Reference images do not match the manifest. Refusing to reuse the idempotency key.');
+    images.references.forEach((item, index) => {
+      const saved = manifest.referenceImages[index];
+      if (item.sha256 !== saved.sha256 || item.mime !== saved.mime) throw new Error(`Reference image ${index + 1} does not match the manifest. Refusing to reuse the idempotency key.`);
+    });
   }
-  return { text, frame };
+  return { text, frame: images.frame, references: images.references };
 }
 
-export async function resumeSubmission({ manifestPath, prompt, firstFrame, baseUrl, apiKey, fetchImpl = globalThis.fetch, debugLog = () => {} }) {
+export async function resumeSubmission({ manifestPath, prompt, firstFrame = null, referenceImages = [], spokenLanguage = null, baseUrl, apiKey, fetchImpl = globalThis.fetch, debugLog = () => {} }) {
   const manifest = await loadManifest(manifestPath);
   if (baseUrl != null && canonicalOrigin(baseUrl) !== manifest.origin) throw new Error('Base URL does not match the manifest.');
   if (manifest.taskId) {
@@ -462,13 +539,14 @@ export async function resumeSubmission({ manifestPath, prompt, firstFrame, baseU
     await writeManifest(manifestPath, manifest, { exclusive: false });
     return { submitted: false, posted: false, manifest: manifestPath, ...publicTask(raw) };
   }
-  if (typeof prompt !== 'string' || !Buffer.isBuffer(firstFrame)) throw new Error('Resume without a task id needs the original prompt and first frame.');
+  if (typeof prompt !== 'string') throw new Error(manifest.imageMode === 'reference_image' ? 'Resume without a task id needs the original prompt and the same reference images.' : 'Resume without a task id needs the original prompt and first frame.');
   const fresh = estimateCost({ resolution: manifest.resolution, duration: manifest.duration, count: 1 });
   if (fresh.estimatedPoints !== manifest.estimatedPoints) throw new Error('Price table no longer matches the manifest. Refusing to submit.');
   if (fresh.estimatedPoints > manifest.maxPoints) throw new Error('Estimate exceeds the saved maxPoints. Refusing to submit.');
-  const inputs = sameInputs(manifest, prompt, firstFrame);
+  // Check hashes before the idempotency key is sent again.
+  const inputs = sameInputs(manifest, prompt, firstFrame, referenceImages, spokenLanguage);
   try {
-    return await finishSubmit({ manifestPath, manifest, prompt: inputs.text, frame: inputs.frame, apiKey, fetchImpl, debugLog });
+    return await finishSubmit({ manifestPath, manifest, prompt: inputs.text, frame: inputs.frame, references: inputs.references, apiKey, fetchImpl, debugLog });
   } catch (error) {
     throw new Error(`${redactText(error.message)} Manifest kept for resume.`);
   }
@@ -591,11 +669,30 @@ async function readPrompt(path) {
   return readFile(path, 'utf8');
 }
 
-async function readFrame(path) {
+async function readImage(path, label) {
   const info = await stat(path);
-  if (!info.isFile() || info.size < 1) throw new Error('First frame is missing.');
-  if (info.size > MAX_IMAGE_BYTES) throw new Error('First frame exceeds 30 MiB.');
+  if (!info.isFile() || info.size < 1) throw new Error(`${label} is missing.`);
+  if (info.size > MAX_IMAGE_BYTES) throw new Error(`${label} exceeds 30 MiB.`);
   return readFile(path);
+}
+
+function optionList(value) {
+  if (value == null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function referencePaths(values) {
+  const paths = optionList(values['reference-image']);
+  if (values['first-frame'] && paths.length > 0) throw new Error('Use either --first-frame or --reference-image, not both. The hosted API does not allow first_frame and reference_image in the same task.');
+  if (paths.length > MAX_REFERENCE_IMAGES) throw new Error('At most 9 --reference-image files are allowed.');
+  return paths;
+}
+
+function spokenLanguageFlag(value) {
+  if (value == null) return null;
+  const trimmed = value.trim();
+  if (!trimmed) throw new Error('--spoken-language must be one line of at most 40 characters.');
+  return assertSpokenLanguage(trimmed);
 }
 
 function keyFromEnv() {
@@ -615,7 +712,8 @@ async function main() {
   const { positionals, values } = parseArgs({ allowPositionals: true, options: {
     help: { type: 'boolean', short: 'h' },
     resolution: { type: 'string' }, duration: { type: 'string' }, count: { type: 'string' }, ratio: { type: 'string' },
-    'prompt-file': { type: 'string' }, 'first-frame': { type: 'string' }, manifest: { type: 'string' },
+    'prompt-file': { type: 'string' }, 'first-frame': { type: 'string' }, 'reference-image': { type: 'string', multiple: true },
+    'spoken-language': { type: 'string' }, manifest: { type: 'string' },
     'max-points': { type: 'string' }, config: { type: 'string' }, yes: { type: 'boolean' }, mute: { type: 'boolean' },
     'base-url': { type: 'string' }, debug: { type: 'boolean' }, 'task-id': { type: 'string' }, 'output-dir': { type: 'string' },
     timeout: { type: 'string' },
@@ -639,9 +737,12 @@ async function main() {
 
   if (command === 'submit') {
     if (values.count != null) throw new Error('submit creates one task. Use estimate --count for a batch total.');
+    const references = referencePaths(values);
     const result = await submitNew({
       prompt: await readPrompt(values['prompt-file']),
-      firstFrame: await readFrame(values['first-frame']),
+      firstFrame: values['first-frame'] ? await readImage(values['first-frame'], 'First frame') : null,
+      referenceImages: await Promise.all(references.map((path) => readImage(path, 'Reference image'))),
+      spokenLanguage: spokenLanguageFlag(values['spoken-language']),
       manifestPath: values.manifest,
       maxPoints: await resolveBudget(values['max-points'], values.config),
       yes: values.yes === true,
@@ -677,9 +778,14 @@ async function main() {
     return;
   }
   if (command === 'resume') {
+    const paths = referencePaths(values);
     const prompt = values['prompt-file'] ? await readPrompt(values['prompt-file']) : undefined;
-    const firstFrame = values['first-frame'] ? await readFrame(values['first-frame']) : undefined;
-    printJson(await resumeSubmission({ manifestPath: values.manifest, prompt, firstFrame, baseUrl: values['base-url'], ...network }));
+    const firstFrame = values['first-frame'] ? await readImage(values['first-frame'], 'First frame') : null;
+    const referenceImages = await Promise.all(paths.map((path) => readImage(path, 'Reference image')));
+    printJson(await resumeSubmission({
+      manifestPath: values.manifest, prompt, firstFrame, referenceImages,
+      spokenLanguage: spokenLanguageFlag(values['spoken-language']), baseUrl: values['base-url'], ...network,
+    }));
     return;
   }
   throw new Error(usage);

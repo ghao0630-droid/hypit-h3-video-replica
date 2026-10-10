@@ -13,7 +13,7 @@ description: 用Hypit组织参考视频改编，按用户选择调用Seedance即
 
 - Seedance即梦路线：读取[Seedance指南](references/seedance.md)，按当前CLI schema与模型目录选模式、引用和参数。
 - 云端GPU H3路线：读取[完整H3教程](references/tutorial.md)，使用完整上游插件。`doctor.mjs`只检查这条路线。
-- 托管 HTTPS H3：读取[托管 H3](references/hosted-h3.md)，使用`scripts/hosted-h3.mjs`。出站只有443时走这条。不要因为 doctor 缺少 SSH 或插件就改去开机。默认分辨率是768P。
+- 托管 HTTPS H3：读取[托管 H3](references/hosted-h3.md)，使用`scripts/hosted-h3.mjs`。出站只有443时走这条。不要因为 doctor 缺少 SSH 或插件就改去开机。默认分辨率是768P。口播换人每段用参考图（本人、空场景、可选上一段尾帧），不要只把尾帧当成下一段首帧；各段保持同一个口语语言。
 - 已确认设计图与统一旁白：读取[设计图展示指南](references/design-presentation.md)，人物表演只承担需要的段落。
 - 安装请求：读取[安装说明](references/installation.md)，按实际路线检查依赖。没有选择H3时不要求CompShare或H3插件。
 

@@ -43,7 +43,7 @@ git clone https://github.com/ghao0630-droid/hypit-h3-video-replica.git
 
 ## 托管 H3（仅 HTTPS）
 
-出站只能走 443、或不想把肖像先传到第三方图床时，用 [hosted-h3.mjs](skills/hypit-h3-video-replica/scripts/hosted-h3.mjs)。密钥放在 `COMPSHARE_MINIMAX_API_KEY`（`sk-ml-` 开头），不要出现在命令行、清单或日志里。默认分辨率是 **768P**；1080P 和 2K 必须显式指定。
+出站只能走 443、或不想把肖像先传到第三方图床时，用 [hosted-h3.mjs](skills/hypit-h3-video-replica/scripts/hosted-h3.mjs)。密钥放在 `COMPSHARE_MINIMAX_API_KEY`（`sk-ml-` 开头），不要出现在命令行、清单或日志里。默认分辨率是 **768P**；1080P 和 2K 必须显式指定。口播换人用重复的 `--reference-image`（本人照片、空场景、可选的上一段尾帧），不要只把上一段尾帧当成下一段 `--first-frame`。
 
 提交前要有 `--max-points`（或配置里的 `maxPoints`）和 `--yes`。估算超过上限就拒绝。幂等键和 `taskId` 字段在任何网络请求之前写入清单；响应丢失时用同一个键恢复，已经有任务号时 `resume` 只查询和下载。积分在提交时预占，失败或取消后释放。官方单价是 480P 5 积分/秒、768P 10、1080P 19、2K 20、4K 22；套餐口径 1100 积分 = ¥9.90。2026-10-10 一次 5 秒 480P 实测扣了 20 积分。估算不是账单。完整步骤，以及和 SSH 自建的取舍，见[托管 H3](skills/hypit-h3-video-replica/references/hosted-h3.md)。
 
